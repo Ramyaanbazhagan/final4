@@ -14,7 +14,7 @@ st.set_page_config(page_title="Jabez – Neural Persona", layout="wide")
 # ===============================
 # 🔐 API KEY (PUT YOUR KEY HERE)
 # ===============================
-genai.configure(api_key="AIzaSyDU0a1Jy8WK-duNHN2zr3-zomYTjyMNuY0")
+genai.configure(api_key="AIzaSyDSALqpEtbhaBXDfmPFvgxwBI7xmagDZow")
 
 # ===============================
 # LOAD DATASET

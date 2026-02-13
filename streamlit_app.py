@@ -1,125 +1,95 @@
 import streamlit as st
 import json
-import os
 import numpy as np
 from sentence_transformers import SentenceTransformer, util
 import google.generativeai as genai
 from gtts import gTTS
 import tempfile
-from datetime import datetime
 
-# ==============================
-# CONFIG
-# ==============================
+# ===============================
+# PAGE CONFIG
+# ===============================
+st.set_page_config(page_title="Jabez – Neural Persona", layout="wide")
 
-st.set_page_config(page_title="Jabez – Ethical AI Persona", layout="wide")
-
-# 🔑 API KEY (Inside file – No secrets error)
+# ===============================
+# 🔐 API KEY (PUT YOUR KEY HERE)
+# ===============================
 genai.configure(api_key="AIzaSyDU0a1Jy8WK-duNHN2zr3-zomYTjyMNuY0")
 
-BOT_NAME = "Jabez"
-
-# ==============================
-# SAFE JSON LOAD
-# ==============================
-
+# ===============================
+# LOAD DATASET
+# ===============================
+@st.cache_resource
 def load_memory():
-    try:
-        with open("dataset.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return {}
+    with open("dataset.json", "r", encoding="utf-8") as f:
+        return json.load(f)
 
 memory_data = load_memory()
 
-# ==============================
-# FLATTEN MEMORY SAFELY
-# ==============================
-
+# ===============================
+# FLATTEN MEMORY
+# ===============================
 def flatten_memory(data):
     texts = []
 
-    def recurse(obj):
+    def extract(obj):
         if isinstance(obj, dict):
             for v in obj.values():
-                recurse(v)
+                extract(v)
         elif isinstance(obj, list):
             for item in obj:
-                recurse(item)
+                extract(item)
         else:
             texts.append(str(obj))
 
-    recurse(data)
+    extract(data)
     return texts
 
 memory_texts = flatten_memory(memory_data)
 
-# ==============================
-# EMBEDDINGS
-# ==============================
-
+# ===============================
+# LOAD EMBEDDINGS
+# ===============================
 @st.cache_resource
-def load_model():
+def load_embeddings():
     model = SentenceTransformer("all-MiniLM-L6-v2")
     embeddings = model.encode(memory_texts, convert_to_tensor=True)
     return model, embeddings
 
-model, embeddings = load_model()
+embed_model, embeddings = load_embeddings()
 
-# ==============================
-# MEMORY SEARCH
-# ==============================
-
-def retrieve_context(query, top_k=5):
-    if not memory_texts:
-        return []
-    query_emb = model.encode(query, convert_to_tensor=True)
+# ===============================
+# MEMORY RETRIEVAL
+# ===============================
+def retrieve_context(query, top_k=3):
+    query_emb = embed_model.encode(query, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(query_emb, embeddings)[0]
     top_idx = np.argsort(-scores.cpu().numpy())[:top_k]
     return [memory_texts[i] for i in top_idx]
 
-# ==============================
+# ===============================
 # EMOTION DETECTION
-# ==============================
-
+# ===============================
 def detect_emotion(text):
     t = text.lower()
-
-    if any(w in t for w in ["sad", "lonely", "cry", "miss"]):
+    if any(w in t for w in ["sad", "miss", "lonely", "cry", "upset"]):
         return "sad"
-    if any(w in t for w in ["happy", "excited", "love"]):
+    if any(w in t for w in ["happy", "excited", "love", "great"]):
         return "happy"
-    if any(w in t for w in ["angry", "upset", "fight"]):
-        return "tense"
     return "neutral"
 
-# ==============================
-# VOICE
-# ==============================
-
-def speak(text, emotion):
+# ===============================
+# TEXT TO SPEECH
+# ===============================
+def speak(text):
     tts = gTTS(text)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     tts.save(tmp.name)
     return tmp.name
 
-# ==============================
-# SESSION STATE
-# ==============================
-
-if "chat" not in st.session_state:
-    st.session_state.chat = []
-
-if "dependency_score" not in st.session_state:
-    st.session_state.dependency_score = 0
-
-if "memory_strength" not in st.session_state:
-    st.session_state.memory_strength = 0
-
-# ==============================
-# SIDEBAR
-# ==============================
-
+# ===============================
+# SIDEBAR CONTROL PANEL
+# ===============================
 st.sidebar.title("🧠 Jabez Control Panel")
 
 mode = st.sidebar.radio(
@@ -128,116 +98,110 @@ mode = st.sidebar.radio(
 )
 
 voice_on = st.sidebar.checkbox("🔊 Voice Output", value=True)
-show_reasoning = st.sidebar.checkbox("🧠 Show Analytics")
-
-emotion_intensity = st.sidebar.slider("Emotion Intensity", 1, 5, 3)
+show_reasoning = st.sidebar.checkbox("🧠 Show Reasoning")
 
 st.sidebar.markdown("---")
-st.sidebar.info("⚠ Ethical AI Prototype\nThis AI does not replace real relationships.")
+st.sidebar.caption("Ethical AI • Responsible AI • Research Prototype")
 
-# ==============================
+# ===============================
 # MAIN UI
-# ==============================
+# ===============================
+st.title("🤖 Jabez – Neural Persona")
 
-st.title("🤖 Jabez – Ethical Synthetic Persona")
-
-col1, col2 = st.columns([1,2])
+col1, col2 = st.columns([1, 2])
 
 with col1:
-    st.image("https://i.imgur.com/8Km9tLL.png", use_column_width=True)
+    st.image(
+        "https://i.imgur.com/8Km9tLL.png",
+        caption="Jabez Persona",
+        use_column_width=True
+    )
 
 with col2:
-    for role, msg in st.session_state.chat:
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+
+    for role, msg in st.session_state.chat[-6:]:
         if role == "user":
             st.markdown(f"🧍 **You:** {msg}")
         else:
-            st.markdown(f"🤖 **{BOT_NAME}:** {msg}")
+            st.markdown(f"🤖 **Jabez:** {msg}")
 
-# ==============================
-# INPUT
-# ==============================
-
+# ===============================
+# USER INPUT
+# ===============================
 st.markdown("---")
 user_input = st.text_input("Talk to Jabez:")
 
-if st.button("Send") and user_input:
+if st.button("Send"):
+    if user_input.strip():
 
-    st.session_state.chat.append(("user", user_input))
+        st.session_state.chat.append(("user", user_input))
 
-    # Dependency monitor
-    if any(word in user_input.lower() for word in ["only you", "can't live", "need you always"]):
-        st.session_state.dependency_score += 1
+        # Retrieve limited memory
+        context = retrieve_context(user_input, top_k=3)
+        context_text = "\n".join(context[:3])
 
-    context = retrieve_context(user_input)
-    context_text = "\n".join(context)
+        emotion = detect_emotion(user_input)
 
-    # Mode control
-    if mode == "🤍 Emotional Support":
-        style_instruction = "Respond softly, supportive and short."
-    elif mode == "💬 Casual Talk":
-        style_instruction = "Respond friendly and normal length."
-    else:
-        style_instruction = "Use memory context strongly in response."
+        # Tone control
+        if emotion == "sad":
+            tone_instruction = "Respond softly, gently, briefly, and comfortingly."
+        elif emotion == "happy":
+            tone_instruction = "Respond energetically and warmly."
+        else:
+            tone_instruction = "Respond naturally and warmly."
 
-    prompt = f"""
-You are {BOT_NAME}, an ethical AI persona.
-You never claim to be human.
-Avoid emotional dependency.
+        # Mode control
+        if mode == "🧠 Memory Mode":
+            mode_instruction = "Use memory context carefully."
+        elif mode == "🤍 Emotional Support":
+            mode_instruction = "Focus on emotional reassurance."
+        else:
+            mode_instruction = "Have a light and casual conversation."
 
-Emotion Intensity Level: {emotion_intensity}
+        prompt = f"""
+You are Jabez, a synthetic AI persona created for research.
 
-Mode: {mode}
+IMPORTANT:
+- Do NOT claim to be human.
+- Do NOT create emotional dependency.
+- Stay within ethical AI boundaries.
+
+{tone_instruction}
+{mode_instruction}
 
 Memory Context:
 {context_text}
 
 User: {user_input}
-{BOT_NAME}:
+Jabez:
 """
 
-    response = genai.GenerativeModel(
-        "models/gemini-1.5-flash"
-    ).generate_content(prompt)
+        try:
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
-    ai_text = response.text.strip()
+            response = model.generate_content(
+                prompt[:8000]  # limit size to avoid error
+            )
 
-    emotion = detect_emotion(ai_text)
+            ai_text = response.text.strip()
 
-    st.session_state.chat.append(("ai", ai_text))
+        except Exception as e:
+            ai_text = "Sorry, I encountered an issue generating a response."
 
-    # Save chat into JSON memory
-    if "chat_history" not in memory_data:
-        memory_data["chat_history"] = []
+        st.session_state.chat.append(("ai", ai_text))
 
-    memory_data["chat_history"].append({
-        "time": str(datetime.now()),
-        "user": user_input,
-        "bot": ai_text
-    })
+        # Voice
+        if voice_on:
+            audio_file = speak(ai_text)
+            st.audio(audio_file)
 
-    with open("dataset.json", "w", encoding="utf-8") as f:
-        json.dump(memory_data, f, indent=2)
-
-    # Increase memory strength
-    st.session_state.memory_strength += 1
-
-    # Voice
-    if voice_on:
-        audio = speak(ai_text, emotion)
-        st.audio(audio)
-
-# ==============================
-# ANALYTICS PANEL
-# ==============================
-
-if show_reasoning:
-    st.markdown("## 🧠 AI Analytics Dashboard")
-
-    st.write("Detected Emotion:", emotion)
-    st.write("Memory Strength Score:", st.session_state.memory_strength)
-    st.write("Dependency Score:", st.session_state.dependency_score)
-
-    if st.session_state.dependency_score > 3:
-        st.warning("⚠ Emotional dependency risk detected.")
-
-    st.write("Persona Mode:", mode)
+        # Reasoning
+        if show_reasoning:
+            st.markdown("### 🧠 Internal State")
+            st.write("Emotion detected:", emotion)
+            st.write("Mode:", mode)
+            st.write("Memory Used:")
+            for c in context:
+                st.write("-", c)

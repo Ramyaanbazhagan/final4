@@ -6,19 +6,19 @@ import google.generativeai as genai
 from gtts import gTTS
 import tempfile
 
-# ===============================
+# =====================================
 # PAGE CONFIG
-# ===============================
+# =====================================
 st.set_page_config(page_title="Jabez – Neural Persona", layout="wide")
 
-# ===============================
-# 🔐 API KEY (PUT YOUR KEY HERE)
-# ===============================
-genai.configure(api_key="AIzaSyDSALqpEtbhaBXDfmPFvgxwBI7xmagDZow")
+# =====================================
+# 🔐 PUT YOUR API KEY HERE
+# =====================================
+genai.configure(api_key="AIzaSyAfxdwvR3OA6Cuki9b3JOyHmsNeFIkyLGs")
 
-# ===============================
+# =====================================
 # LOAD DATASET
-# ===============================
+# =====================================
 @st.cache_resource
 def load_memory():
     with open("dataset.json", "r", encoding="utf-8") as f:
@@ -26,9 +26,9 @@ def load_memory():
 
 memory_data = load_memory()
 
-# ===============================
-# FLATTEN MEMORY
-# ===============================
+# =====================================
+# FLATTEN MEMORY SAFELY
+# =====================================
 def flatten_memory(data):
     texts = []
 
@@ -40,16 +40,18 @@ def flatten_memory(data):
             for item in obj:
                 extract(item)
         else:
-            texts.append(str(obj))
+            text = str(obj)
+            if len(text) < 500:  # prevent huge chunks
+                texts.append(text)
 
     extract(data)
     return texts
 
 memory_texts = flatten_memory(memory_data)
 
-# ===============================
+# =====================================
 # LOAD EMBEDDINGS
-# ===============================
+# =====================================
 @st.cache_resource
 def load_embeddings():
     model = SentenceTransformer("all-MiniLM-L6-v2")
@@ -58,38 +60,41 @@ def load_embeddings():
 
 embed_model, embeddings = load_embeddings()
 
-# ===============================
+# =====================================
 # MEMORY RETRIEVAL
-# ===============================
-def retrieve_context(query, top_k=3):
+# =====================================
+def retrieve_context(query, top_k=2):
+    if not memory_texts:
+        return []
+
     query_emb = embed_model.encode(query, convert_to_tensor=True)
     scores = util.pytorch_cos_sim(query_emb, embeddings)[0]
     top_idx = np.argsort(-scores.cpu().numpy())[:top_k]
-    return [memory_texts[i] for i in top_idx]
+    return [memory_texts[i][:300] for i in top_idx]
 
-# ===============================
+# =====================================
 # EMOTION DETECTION
-# ===============================
+# =====================================
 def detect_emotion(text):
     t = text.lower()
-    if any(w in t for w in ["sad", "miss", "lonely", "cry", "upset"]):
+    if any(w in t for w in ["sad", "lonely", "miss", "cry", "upset"]):
         return "sad"
-    if any(w in t for w in ["happy", "excited", "love", "great"]):
+    if any(w in t for w in ["happy", "love", "excited", "great"]):
         return "happy"
     return "neutral"
 
-# ===============================
+# =====================================
 # TEXT TO SPEECH
-# ===============================
+# =====================================
 def speak(text):
     tts = gTTS(text)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
     tts.save(tmp.name)
     return tmp.name
 
-# ===============================
-# SIDEBAR CONTROL PANEL
-# ===============================
+# =====================================
+# SIDEBAR
+# =====================================
 st.sidebar.title("🧠 Jabez Control Panel")
 
 mode = st.sidebar.radio(
@@ -101,11 +106,11 @@ voice_on = st.sidebar.checkbox("🔊 Voice Output", value=True)
 show_reasoning = st.sidebar.checkbox("🧠 Show Reasoning")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Ethical AI • Responsible AI • Research Prototype")
+st.sidebar.caption("Ethical AI • Responsible AI • Academic Prototype")
 
-# ===============================
+# =====================================
 # MAIN UI
-# ===============================
+# =====================================
 st.title("🤖 Jabez – Neural Persona")
 
 col1, col2 = st.columns([1, 2])
@@ -127,9 +132,9 @@ with col2:
         else:
             st.markdown(f"🤖 **Jabez:** {msg}")
 
-# ===============================
+# =====================================
 # USER INPUT
-# ===============================
+# =====================================
 st.markdown("---")
 user_input = st.text_input("Talk to Jabez:")
 
@@ -138,40 +143,39 @@ if st.button("Send"):
 
         st.session_state.chat.append(("user", user_input))
 
-        # Retrieve limited memory
-        context = retrieve_context(user_input, top_k=3)
-        context_text = "\n".join(context[:3])
-
+        # Emotion
         emotion = detect_emotion(user_input)
+
+        # Retrieve limited memory
+        context = retrieve_context(user_input)
+        context_text = "\n".join(context)
 
         # Tone control
         if emotion == "sad":
-            tone_instruction = "Respond softly, gently, briefly, and comfortingly."
+            tone = "Respond softly and briefly in a comforting way."
         elif emotion == "happy":
-            tone_instruction = "Respond energetically and warmly."
+            tone = "Respond energetically and warmly."
         else:
-            tone_instruction = "Respond naturally and warmly."
+            tone = "Respond naturally and warmly."
 
         # Mode control
         if mode == "🧠 Memory Mode":
-            mode_instruction = "Use memory context carefully."
+            mode_instruction = "Use the memory context carefully."
         elif mode == "🤍 Emotional Support":
             mode_instruction = "Focus on emotional reassurance."
         else:
-            mode_instruction = "Have a light and casual conversation."
+            mode_instruction = "Have a light casual conversation."
 
+        # SAFE SHORT PROMPT
         prompt = f"""
-You are Jabez, a synthetic AI persona created for research.
+You are Jabez, a synthetic AI persona.
+Do not claim to be human.
+Stay ethical and avoid emotional dependency.
 
-IMPORTANT:
-- Do NOT claim to be human.
-- Do NOT create emotional dependency.
-- Stay within ethical AI boundaries.
-
-{tone_instruction}
+{tone}
 {mode_instruction}
 
-Memory Context:
+Memory:
 {context_text}
 
 User: {user_input}
@@ -180,28 +184,19 @@ Jabez:
 
         try:
             model = genai.GenerativeModel("gemini-1.5-flash")
-
-            response = model.generate_content(
-                prompt[:8000]  # limit size to avoid error
-            )
-
+            response = model.generate_content(prompt)
             ai_text = response.text.strip()
-
         except Exception as e:
-            ai_text = "Sorry, I encountered an issue generating a response."
+            ai_text = f"API Error: {str(e)}"
 
         st.session_state.chat.append(("ai", ai_text))
 
-        # Voice
-        if voice_on:
+        if voice_on and "API Error" not in ai_text:
             audio_file = speak(ai_text)
             st.audio(audio_file)
 
-        # Reasoning
         if show_reasoning:
-            st.markdown("### 🧠 Internal State")
-            st.write("Emotion detected:", emotion)
+            st.markdown("### 🧠 Debug Info")
+            st.write("Emotion:", emotion)
             st.write("Mode:", mode)
-            st.write("Memory Used:")
-            for c in context:
-                st.write("-", c)
+            st.write("Memory Used:", context)

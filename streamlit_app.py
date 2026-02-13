@@ -1,11 +1,12 @@
 import streamlit as st
 import json
 import numpy as np
-import os
 from sentence_transformers import SentenceTransformer, util
 import google.generativeai as genai
 from gtts import gTTS
 import tempfile
+import os
+import time
 
 # --------------------------------
 # PAGE CONFIG
@@ -13,13 +14,21 @@ import tempfile
 st.set_page_config(page_title="Jabez AI", layout="wide")
 
 # --------------------------------
-# API KEY (FROM SECRETS)
+# API KEY
 # --------------------------------
-try:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except:
-    st.error("API key not found. Add GEMINI_API_KEY in Streamlit Secrets.")
-    st.stop()
+genai.configure(api_key="AIzaSyDxKnyr6NZ7maXk5bSw9TbTug2E-TXSEz4")
+
+# --------------------------------
+# THEME TOGGLE
+# --------------------------------
+theme = st.sidebar.radio("🎨 Theme", ["Light", "Dark"])
+
+if theme == "Dark":
+    st.markdown("""
+        <style>
+        body {background-color: #0E1117; color: white;}
+        </style>
+    """, unsafe_allow_html=True)
 
 # --------------------------------
 # LOAD DATASET
@@ -63,7 +72,6 @@ def flatten_memory(data):
 
     return texts
 
-
 memory_texts = flatten_memory(memory_data)
 
 # --------------------------------
@@ -86,7 +94,7 @@ def retrieve_context(query, top_k=3):
     return [memory_texts[i] for i in top_idx]
 
 # --------------------------------
-# SAVE NEW CHAT (LONG TERM MEMORY)
+# SAVE MEMORY
 # --------------------------------
 def save_memory(user, ai):
     if "chat_examples" not in memory_data:
@@ -112,7 +120,7 @@ def detect_emotion(text):
     return "neutral"
 
 # --------------------------------
-# VOICE OUTPUT
+# VOICE
 # --------------------------------
 def speak(text, emotion):
     slow = True if emotion == "sad" else False
@@ -122,18 +130,7 @@ def speak(text, emotion):
     return tmp.name
 
 # --------------------------------
-# DISCLAIMER (Ethical AI)
-# --------------------------------
-st.warning("""
-⚠️ Research Prototype.
-Jabez AI is a synthetic AI persona.
-It is NOT a real human.
-It does NOT replace real relationships.
-Designed under Ethical AI & Responsible AI principles.
-""")
-
-# --------------------------------
-# SIDEBAR CONTROL PANEL
+# SIDEBAR
 # --------------------------------
 st.sidebar.title("🧠 Jabez Control Panel")
 
@@ -144,28 +141,57 @@ persona_mode = st.sidebar.radio(
     ["🧠 Memory Mode", "💬 Casual Talk", "🤍 Emotional Support"]
 )
 
+face_mode = st.sidebar.checkbox("🎥 Face-to-Face Mode")
+
 show_emotion = st.sidebar.checkbox("Show Emotion Debug")
 
 # --------------------------------
-# MAIN UI
+# DISCLAIMER
+# --------------------------------
+st.warning("""
+⚠️ Research Prototype.
+Jabez AI is a synthetic persona for study purposes.
+It does NOT represent a real human.
+Maintains Ethical AI & Responsible AI boundaries.
+""")
+
+# --------------------------------
+# MAIN TITLE
 # --------------------------------
 st.title("🤖 Jabez AI")
 
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
+# --------------------------------
+# DISPLAY CHAT (WhatsApp Style)
+# --------------------------------
 for role, msg in st.session_state.chat:
-    if role == "user":
-        st.markdown(f"🧍 **You:** {msg}")
-    else:
-        st.markdown(f"🤖 **Jabez:** {msg}")
 
+    if role == "user":
+        st.markdown(f"""
+        <div style='background-color:#DCF8C6;
+        padding:10px;border-radius:15px;
+        margin:5px 0;text-align:right'>
+        {msg}
+        </div>
+        """, unsafe_allow_html=True)
+
+    else:
+        st.markdown(f"""
+        <div style='background-color:#F1F0F0;
+        padding:10px;border-radius:15px;
+        margin:5px 0;text-align:left'>
+        {msg}
+        </div>
+        """, unsafe_allow_html=True)
+
+# --------------------------------
+# INPUT
+# --------------------------------
 st.markdown("---")
 user_input = st.text_input("Talk to Jabez:")
 
-# --------------------------------
-# GENERATION
-# --------------------------------
 if st.button("Send") and user_input.strip():
 
     st.session_state.chat.append(("user", user_input))
@@ -180,13 +206,13 @@ if st.button("Send") and user_input.strip():
     elif persona_mode == "💬 Casual Talk":
         mode_instruction = "Respond short and casual."
     elif persona_mode == "🤍 Emotional Support":
-        mode_instruction = "Respond warmly and supportively but avoid emotional dependency."
+        mode_instruction = "Respond warmly and supportively."
 
     prompt = f"""
 You are Jabez.
 You are an AI persona for academic research.
 Never claim to be human.
-Never create emotional dependency.
+Avoid emotional dependency.
 Maintain healthy AI-human boundaries.
 
 {mode_instruction}
@@ -198,19 +224,42 @@ User: {user_input}
 Jabez:
 """
 
-    try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        ai_text = response.text.strip()
-    except Exception as e:
-        st.error(f"Model generation failed: {e}")
-        st.stop()
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
 
+    with st.spinner("Jabez is thinking..."):
+        time.sleep(1)
+        response = model.generate_content(prompt)
+
+    ai_text = response.text.strip()
     emotion = detect_emotion(ai_text)
 
     st.session_state.chat.append(("ai", ai_text))
-
     save_memory(user_input, ai_text)
+
+    # Emotion Badge
+    badge_color = {
+        "happy": "green",
+        "sad": "blue",
+        "neutral": "gray"
+    }
+
+    st.markdown(f"""
+    <div style='padding:5px;
+    border-radius:10px;
+    background-color:{badge_color[emotion]};
+    color:white;width:150px'>
+    Emotion: {emotion.upper()}
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Face Reaction
+    if face_mode:
+        if emotion == "happy":
+            st.image("https://i.imgur.com/1X6a7LQ.png", width=200)
+        elif emotion == "sad":
+            st.image("https://i.imgur.com/dJb8F8H.png", width=200)
+        else:
+            st.image("https://i.imgur.com/8Km9tLL.png", width=200)
 
     if voice_on:
         audio_file = speak(ai_text, emotion)

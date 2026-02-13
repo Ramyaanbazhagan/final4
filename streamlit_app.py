@@ -16,7 +16,7 @@ st.set_page_config(page_title="Jabez AI", layout="wide")
 # -------------------------------
 # API KEY (Use Streamlit Secrets)
 # -------------------------------
-genai.configure(api_key=st.secrets["AIzaSyCI4uglizm35hDx5COaa9uuXMJjdg-VNZg"])
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # -------------------------------
 # MEMORY FILE

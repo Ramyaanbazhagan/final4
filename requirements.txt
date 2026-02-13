@@ -1,6 +1,6 @@
 streamlit
-google-generativeai
+numpy
 sentence-transformers
 torch
-numpy
-gtts
+google-generativeai
+gTTS

@@ -15,7 +15,7 @@ from datetime import datetime
 st.set_page_config(page_title="Jabez – Ethical AI Persona", layout="wide")
 
 # 🔑 API KEY (Inside file – No secrets error)
-genai.configure(api_key="YOUR_GEMINI_API_KEY_HERE")
+genai.configure(api_key="AIzaSyDU0a1Jy8WK-duNHN2zr3-zomYTjyMNuY0")
 
 BOT_NAME = "Jabez"
 
